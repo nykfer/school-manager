@@ -4,11 +4,11 @@ import os
 
 load_dotenv()
 
-engine_db = create_engine(os.getenv("POSTGRES_URL"), echo=True)
+engine = create_engine(os.getenv("POSTGRES_URL"), echo=True)
 
 def create_db_and_tables():
-    SQLModel.metadata.create_all(engine_db)
+    SQLModel.metadata.create_all(engine)
 
 def get_session_db():
-    with Session(engine_db) as session:
+    with Session(engine) as session:
         yield session

@@ -6,15 +6,15 @@ from contextlib import asynccontextmanager
 from logging import info
 import logging
 
+"""FastAPI's dependecies and models"""
+from ..dependecies.models import Teacher, Assignment, Subject
+from ..dependecies.dependency import SessionDep
+
 """Imports for postgres db"""
 from ...database.postgres.db import create_db_and_tables
 
 """Imports for mongodb"""
 from ...database.mongodb.db import database, collection
-
-"""FastAPI's dependecies and models"""
-from ..dependecies.models import Teacher
-from ..dependecies.dependency import SessionDep
 
 router: APIRouter = APIRouter() 
 
