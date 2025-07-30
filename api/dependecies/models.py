@@ -41,7 +41,9 @@ class Assignment(SQLModel, table=True):
     added:date = Field(index=True) #where assign was added
     
 class SchoolerAssignmentSubmission(SQLModel, table=True):
+    submitted_assignment_id: int | None = Field(primary_key=True)
     schooler_id:int = Field(foreign_key="schooler.schooler_id")
     assignment_id = Field(foreign_key="assignment.assignment_id") 
+    work: str = Field(description="work that schoolers handed in")
     submitted:date
     grade:int | None = Field(default=None)

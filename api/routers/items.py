@@ -226,12 +226,15 @@ async def get_assign(session: SessionDep,
 """Get schoolers and their submitted assignments for a given assignment ID, with option to include/exclude late submissions."""
 
 @router.get("/submitted/assignments/{assign_id}/")
-async def get_submitted_asign(session: SessionDep,
-                              assign_id: Annotated[int, Path(description="""Id of needed assign""")],
-                              handed_late: Annotated[bool, Query(description="""Exclude or
-                                                                 include assign that haded in late.
-                                                                 True means include""")]=True)->Dict[Schooler,
-                                                                                                     SchoolerAssignmentSubmission]:
+async def get_submitted_asign(
+    session: SessionDep,
+    assign_id: Annotated[int, Path(description="""Id of needed assign""")],
+    handed_late: Annotated[bool, Query(description="""Exclude or
+                                                        include assign that haded in late.
+                                                        True means include""")]=True
+    )->Dict[Schooler,
+            SchoolerAssignmentSubmission
+            ]:
     
         try:
             statement = select(Assignment).where(Assignment.assignment_id == assign_id)
@@ -293,3 +296,283 @@ async def get_admins(session: SessionDep,
         statement = statement.where(Admin.name == name)
     admins = session.exec(statement).offset(offset).limit(limit).all()
     return admins
+
+#update calls
+
+@router.put("/update/{assignment_id}/")
+async def update_assign(
+    session: SessionDep,
+    assignment_id: Annotated[int, Path()],
+    title: Annotated[str | None, Query()] = None,
+    description: Annotated[str | None, Query()] = None,
+    deadline: Annotated[date | None, Query()] = None,
+    assign_type: Annotated[str | None, Query()] = None,
+    subject_id: Annotated[int | None, Query()] = None,
+    teacher_id: Annotated[int | None, Query()] = None,
+) -> str:
+    assignment = session.get(Assignment, assignment_id)
+    if not assignment:
+        return f"Assignment with id {assignment_id} not found."
+    if title is not None:
+        assignment.title = title
+    if description is not None:
+        assignment.description = description
+    if deadline is not None:
+        assignment.deadline = deadline
+    if assign_type is not None:
+        assignment.assign_type = assign_type
+    if subject_id is not None:
+        assignment.subject_id = subject_id
+    if teacher_id is not None:
+        assignment.teacher_id = teacher_id
+    session.add(assignment)
+    session.commit()
+    session.refresh(assignment)
+    return f"Assignment {assignment} updated successfully."
+
+@router.put("/give/garde/{grade}/assign/{submitted_assignment_id}")
+async def give_grade(
+    session: SessionDep,
+    submitted_assignment_id: Annotated[int, Path()],
+    grade: Annotated[int, Path()]
+    )->str:
+    
+    assignment = session.get(SchoolerAssignmentSubmission, submitted_assignment_id)
+    assignment.grade = grade
+    
+    session.add(assignment)
+    session.commit()
+    session.refresh(assignment)
+    
+    return f"Grade {grade} added successfully to the assignment {assignment}."
+
+""""This is the function for schoolers to update their handed in assignments"""
+@router.put("/update/submitted/assignment/{assignment_id}/{schooler_id}/work/{work}")
+async def update_submitted_assign(
+    session: SessionDep,
+    assignment_id: Annotated[int, Path()],
+    schooler_id: Annotated[int, Path()],
+    work: Annotated[str, Path()]
+    )->str:
+    statement = select(SchoolerAssignmentSubmission).where(SchoolerAssignmentSubmission.schooler_id == schooler_id)
+    statement = statement.where(SchoolerAssignmentSubmission.assignment_id == assignment_id)
+    
+    try:
+        assignment = session.exec(statement).one()
+    except Exception as e:
+        print(f"Error during finding assignment with {assignment_id} and {schooler_id}")
+        
+    assignment.work = work
+    session.add(assignment)
+    session.commit()
+    session.refresh(assignment)
+    
+    return f"Work is updated in the assignment - {assignment}"
+
+# Update class info
+@router.put("/update/class/{class_id}/")
+async def update_class_info(
+    session: SessionDep,
+    class_id: Annotated[int, Path()],
+    name: Annotated[str | None, Query()] = None,
+    teacher_id: Annotated[int | None, Query()] = None
+) -> str:
+    """Update class information by class_id."""
+    class_obj = session.get(Class, class_id)
+    if not class_obj:
+        return f"Class with id {class_id} not found."
+    if name is not None:
+        class_obj.name = name
+    if teacher_id is not None:
+        class_obj.teacher_id = teacher_id
+    session.add(class_obj)
+    session.commit()
+    session.refresh(class_obj)
+    return f"Class {class_obj} updated successfully."
+
+# Update subject info
+@router.put("/update/subject/{subject_id}/name/{name}")
+async def update_subject_info(
+    session: SessionDep,
+    subject_id: Annotated[int, Path()],
+    name: Annotated[str | None, Query()] = None
+) -> str:
+    """Update subject information by subject_id."""
+    subject = session.get(Subject, subject_id)
+    if not subject:
+        return f"Subject with id {subject_id} not found."
+    if name is not None:
+        subject.name = name
+    session.add(subject)
+    session.commit()
+    session.refresh(subject)
+    return f"Subject {subject} updated successfully."
+
+# Update schooler info
+@router.put("/update/schooler/{schooler_id}/")
+async def update_schooler_info(
+    session: SessionDep,
+    schooler_id: Annotated[int, Path()],
+    name: Annotated[str | None, Query()] = None,
+    age: Annotated[int | None, Query()] = None,
+    class_id: Annotated[int | None, Query()] = None
+) -> str:
+    """Update schooler information by schooler_id."""
+    schooler = session.get(Schooler, schooler_id)
+    if not schooler:
+        return f"Schooler with id {schooler_id} not found."
+    if name is not None:
+        schooler.name = name
+    if age is not None:
+        schooler.age = age
+    if class_id is not None:
+        schooler.class_id = class_id
+    session.add(schooler)
+    session.commit()
+    session.refresh(schooler)
+    return f"Schooler {schooler} updated successfully."
+
+# Update teacher info
+@router.put("/update/teacher/{teacher_id}/")
+async def update_teacher_info(
+    session: SessionDep,
+    teacher_id: Annotated[int, Path()],
+    name: Annotated[str | None, Query()] = None,
+    age: Annotated[int | None, Query()] = None,
+    subject_id: Annotated[int | None, Query()] = None,
+    class_id: Annotated[int | None, Query()] = None
+) -> str:
+    """Update teacher information by teacher_id."""
+    teacher = session.get(Teacher, teacher_id)
+    if not teacher:
+        return f"Teacher with id {teacher_id} not found."
+    if name is not None:
+        teacher.name = name
+    if age is not None:
+        teacher.age = age
+    if subject_id is not None:
+        teacher.subject_id = subject_id
+    if class_id is not None:
+        teacher.class_id = class_id
+    session.add(teacher)
+    session.commit()
+    session.refresh(teacher)
+    return f"Teacher {teacher} updated successfully."
+
+# Update admin info
+@router.put("/update/admin/{admin_id}/")
+async def update_admin_info(
+    session: SessionDep,
+    admin_id: Annotated[int, Path()],
+    name: Annotated[str | None, Query()] = None
+) -> str:
+    """Update admin information by admin_id."""
+    admin = session.get(Admin, admin_id)
+    if not admin:
+        return f"Admin with id {admin_id} not found."
+    if name is not None:
+        admin.name = name
+    session.add(admin)
+    session.commit()
+    session.refresh(admin)
+    return f"Admin {admin} updated successfully."
+
+#delete calls
+
+# Delete assignment by assignment_id
+@router.delete("/delete/assignment/{assignment_id}")
+async def delete_asign(
+    session:SessionDep,
+    assignment_id: Annotated[int, Path()]
+)->str:
+    """Delete an assignment by assignment_id."""
+    assignment = session.get(Assignment, assignment_id)
+    if not assignment:
+        return f"Assignment with id {assignment_id} not found."
+    session.delete(assignment)
+    session.commit()
+    return f"Assignment {assignment} deleted successfully."
+
+# Delete submitted assignment by submitted_assignment_id
+@router.delete("/delete/submmited/assignment/{submitted_assignment_id}")
+async def submitted_delete_asign(
+    session:SessionDep,
+    submitted_assignment_id: Annotated[int, Path()]
+)->str:
+    """Delete an assignment by assignment_id."""
+    assignment = session.get(Assignment, submitted_assignment_id)
+    if not assignment:
+        return f"Submitted assignment with id {submitted_assignment_id} not found."
+    session.delete(assignment)
+    session.commit()
+    return f"Assignment {assignment} deleted successfully."
+
+# Delete class by class_id
+@router.delete("/delete/class/{class_id}")
+async def delete_class(
+    session: SessionDep,
+    class_id: Annotated[int, Path()]
+) -> str:
+    """Delete a class by class_id."""
+    class_obj = session.get(Class, class_id)
+    if not class_obj:
+        return f"Class with id {class_id} not found."
+    session.delete(class_obj)
+    session.commit()
+    return f"Class {class_obj} deleted successfully."
+
+# Delete subject by subject_id
+@router.delete("/delete/subject/{subject_id}")
+async def delete_subject(
+    session: SessionDep,
+    subject_id: Annotated[int, Path()]
+) -> str:
+    """Delete a subject by subject_id."""
+    subject = session.get(Subject, subject_id)
+    if not subject:
+        return f"Subject with id {subject_id} not found."
+    session.delete(subject)
+    session.commit()
+    return f"Subject {subject} deleted successfully."
+
+# Delete schooler by schooler_id
+@router.delete("/delete/schooler/{schooler_id}")
+async def delete_schooler(
+    session: SessionDep,
+    schooler_id: Annotated[int, Path()]
+) -> str:
+    """Delete a schooler by schooler_id."""
+    schooler = session.get(Schooler, schooler_id)
+    if not schooler:
+        return f"Schooler with id {schooler_id} not found."
+    session.delete(schooler)
+    session.commit()
+    return f"Schooler {schooler} deleted successfully."
+
+# Delete teacher by teacher_id
+@router.delete("/delete/teacher/{teacher_id}")
+async def delete_teacher(
+    session: SessionDep,
+    teacher_id: Annotated[int, Path()]
+) -> str:
+    """Delete a teacher by teacher_id."""
+    teacher = session.get(Teacher, teacher_id)
+    if not teacher:
+        return f"Teacher with id {teacher_id} not found."
+    session.delete(teacher)
+    session.commit()
+    return f"Teacher {teacher} deleted successfully."
+
+# Delete admin by admin_id
+@router.delete("/delete/admin/{admin_id}")
+async def delete_admin(
+    session: SessionDep,
+    admin_id: Annotated[int, Path()]
+) -> str:
+    """Delete an admin by admin_id."""
+    admin = session.get(Admin, admin_id)
+    if not admin:
+        return f"Admin with id {admin_id} not found."
+    session.delete(admin)
+    session.commit()
+    return f"Admin {admin} deleted successfully."
