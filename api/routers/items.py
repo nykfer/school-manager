@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 
 """FastAPI's dependecies and models"""
-from api.dependecies.models import Teacher, Admin, Schooler, Assignment, SchoolerAssignmentSubmission, Subject, Class
+from api.dependecies.models import Teacher, Admin, Schooler, Assignment, SubmittedAssignment, Subject, Class
 from api.dependecies.dependency import SessionDep, Learners
 
 """Imports for postgres db"""
@@ -152,7 +152,7 @@ async def get_submitted_asign(
                                                         include assign that haded in late.
                                                         True means include""")]=True
     )->Dict[Schooler,
-            SchoolerAssignmentSubmission
+            SubmittedAssignment
             ]:
     
         try:
@@ -162,11 +162,11 @@ async def get_submitted_asign(
         except Exception as e:
             print("exception")
 
-        statement_asign = select(SchoolerAssignmentSubmission).where(SchoolerAssignmentSubmission.assignment_id == assign_id)
+        statement_asign = select(SubmittedAssignment).where(SubmittedAssignment.assignment_id == assign_id)
         statement_schooler = select(Schooler)
 
         if handed_late == False:
-            statement_asign.where(SchoolerAssignmentSubmission.submitted > assignment.deadline)
+            statement_asign.where(SubmittedAssignment.submitted > assignment.deadline)
 
         assignments = session.exec(statement=statement_asign).all()
 
@@ -239,7 +239,7 @@ async def post_admin(
     session.commit()
     session.refresh(admin)
     
-    return f"Added new admin - {admin.name}"
+    return f"Added new admin - {admin}"
 
 """Add a new teacher to the database."""
 @router.post("/add/teacher", status_code=status.HTTP_201_CREATED)
@@ -250,7 +250,6 @@ async def post_teacher(
                             name:str
                             age:int
                             subject_id: int, foreign key
-                            class_id: int | None, foreign key
                             """)],
     session: SessionDep)->str:
     
@@ -264,7 +263,7 @@ async def post_teacher(
     session.commit()
     session.refresh(teacher)
     
-    return f"Added new teacher - {teacher.name}"
+    return f"Added new teacher - {teacher}"
 
 """Add a new schooler to the database."""
 @router.post("/add/schooler", status_code=status.HTTP_201_CREATED)
@@ -279,7 +278,7 @@ async def post_schooler(
     session: SessionDep
     )->str:
     
-    if not schooler.name or not schooler.age or not schooler.class_id:
+    if not schooler.name or not schooler.age:
         raise HTTPException(status_code=400, detail="Invalid data inputs")
     if schooler.name == "":
         raise HTTPException(status_code=400, detail="Name cannot be an empty string")
@@ -291,50 +290,90 @@ async def post_schooler(
     return f"Added new schooler - {schooler}"
 
 """Create a new assignment and add it to the database."""
-@router.post("/add/{assignment}/", status_code=status.HTTP_201_CREATED)
-async def post_assing(assignment: Annotated[str, Path(
-                                           title="Adding assingment" 
-                                            )],
-                      session: SessionDep)->str:
+@router.post("/add/assignment", status_code=status.HTTP_201_CREATED)
+async def post_assing(
+    assignment: Annotated[Assignment, Body(description="""
+        Provide fields for Assignment table:
+        teacher_id: int
+        subject_id: int
+        title: str
+        description: str
+        assign_type: str
+        deadline: date
+    """)],
+    session: SessionDep
+) -> str:
+    if not assignment.title or not assignment.teacher_id or not assignment.subject_id or not assignment.deadline:
+        raise HTTPException(status_code=400, detail="Invalid data inputs for assignment")
     
     session.add(assignment)
     session.commit()
     session.refresh(assignment)
     
-    return f"New assingment was added - {assignment}"
+    return f"New assignment was added - {assignment}"
 
 """Submit a schooler's assignment to the database."""
-@router.post("/submit/{assignment}/",status_code=status.HTTP_201_CREATED)
-async def submit_assign(assignment: Annotated[str, Path(
-                                           title="Submit assingment" 
-                                            )],
-                      session: SessionDep)->str:
+@router.post("/submit/assignment", status_code=status.HTTP_201_CREATED)
+async def submit_assign(
+    submitted_assignment: Annotated[SubmittedAssignment, Body(description="""
+        Provide fields for SubmittedAssignment table:
+        schooler_id: int
+        assignment_id: int
+        work: str
+    """)],
+    session: SessionDep
+) -> str:
     
-    session.add(assignment)
+    if not submitted_assignment.schooler_id or not submitted_assignment.assignment_id or not submitted_assignment.work:
+        raise HTTPException(status_code=400, detail="Invalid data inputs for submitted assignment")
+    
+    session.add(submitted_assignment)
     session.commit()
-    session.refresh(assignment)
+    session.refresh(submitted_assignment)
     
-    return f"Assignment submitted successful - {assignment}"
+    return f"Assignment submitted successfully - {submitted_assignment}"
 
 
 """Add a new class to the database."""
-@router.post("/add/{grade}/", status_code=status.HTTP_201_CREATED)
-async def post_admin(grade: Annotated[str, Path(
-                                           title="Add new class" 
-                                            )],
-                      session: SessionDep)->str:
-    session.add(grade)
-    session.commit()
-    session.refresh(grade)
+@router.post("/add/class", status_code=status.HTTP_201_CREATED)
+async def post_class(
+    new_class: Annotated[Class,
+                         Body(description="""
+                              Provide fields for Schooler table:
+                              name:str
+                              teacher_id: int, foreign key
+                              """)],
+    session: SessionDep,
+    schoolers: Annotated[List[Schooler] | None, 
+                         Body(description="""Provide list of students for the class""")] = None
+    )->str:
     
-    return f"Added new class - {grade}"
+    if not new_class.name or not new_class.teacher_id:
+        raise HTTPException(status_code=400, detail=f"Invalid data inputs {new_class}")
+    
+    if new_class.name == "":
+        raise HTTPException(status_code=400, detail="Name cannot be an empty string")
+    
+    if schoolers is not None:
+        new_class.schoolers = schoolers
+    
+    session.add(new_class)
+    session.commit()
+    session.refresh(new_class)
+    
+    return f"Added new class - {new_class}"
 
 """Add a new subject to the database."""
-@router.post("/add/{subject}/", status_code=status.HTTP_201_CREATED)
-async def post_admin(subject: Annotated[str, Path(
-                                           title="Add new subject" 
-                                            )],
-                      session: SessionDep)->str:
+@router.post("/add/subject", status_code=status.HTTP_201_CREATED)
+async def post_subject(
+    subject: Annotated[Subject,
+                       Body(description="""Provide fields for Schooler table:
+                            name: str""")],
+    session: SessionDep
+    )->str:
+    if not subject.name:
+        raise HTTPException(status_code=400, detail="Invalid data inputs")
+    
     session.add(subject)
     session.commit()
     session.refresh(subject)
@@ -381,7 +420,7 @@ async def give_grade(
     grade: Annotated[int, Path()]
     )->str:
     
-    assignment = session.get(SchoolerAssignmentSubmission, submitted_assignment_id)
+    assignment = session.get(SubmittedAssignment, submitted_assignment_id)
     assignment.grade = grade
     
     session.add(assignment)
@@ -398,8 +437,8 @@ async def update_submitted_assign(
     schooler_id: Annotated[int, Path()],
     work: Annotated[str, Path()]
     )->str:
-    statement = select(SchoolerAssignmentSubmission).where(SchoolerAssignmentSubmission.schooler_id == schooler_id)
-    statement = statement.where(SchoolerAssignmentSubmission.assignment_id == assignment_id)
+    statement = select(SubmittedAssignment).where(SubmittedAssignment.schooler_id == schooler_id)
+    statement = statement.where(SubmittedAssignment.assignment_id == assignment_id)
     
     try:
         assignment = session.exec(statement).one()
