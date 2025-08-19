@@ -4,7 +4,7 @@ from datetime import date
 
 """FastAPI's dependecies and models"""
 from api.dependecies.models import Teacher, Admin, Schooler, Assignment, SubmittedAssignment, Subject, Class
-from api.dependecies.dependency import SessionDep, Learners
+from api.dependecies.dependency import SessionDep, ComparativeDep, SelectDep, Learners
 
 """Imports for postgres db"""
 from sqlmodel import select
@@ -18,17 +18,12 @@ router_get = APIRouter()
 @router_get.get("/get/learners/list/{learner}", status_code=status.HTTP_200_OK)
 async def get_schoolers(
     session:SessionDep,
+    select_params: SelectDep,
+    comparative_params: ComparativeDep,
     learner: Annotated[Learners, Path(description="schooler or teacher")],
     name: Annotated[str | None, Query(description="Full schooler name")]=None,
-    gte: Annotated[int | None, Query(description="greate or equal then... Only for age")]=None,
-    gt: Annotated[int | None, Query(description="greate then... Only for age")]=None,
-    lte: Annotated[int | None, Query(description="less or equal then... Only for age")]=None,
-    lt: Annotated[int | None, Query(description="less then... Only for age")]=None,
-    e: Annotated[int | None, Query(description="equal smth (number). Only for age")]=None,
     class_id: Annotated[int | None, Query(description="Id of schooler's class")]=None,
     subject_id: Annotated[int | None, Query(description="Subject id for searching speciffic teacher")] = None,
-    offset: int = 0,
-    limit: Annotated[int, Query(le=100)] = 0
     )->List[Schooler]:
     
     person = Schooler if learner.value == "schooler" else Teacher
@@ -40,25 +35,25 @@ async def get_schoolers(
     if class_id is not None:
         statement = statement.where(person.class_id == class_id)
         
-    if gte is not None:
-        statement = statement.where(person.age >= gte)
+    if comparative_params.gte is not None:
+        statement = statement.where(person.age >= comparative_params.gte)
         
-    if gt is not None:
-        statement = statement.where(person.age > gt)
+    if comparative_params.gt is not None:
+        statement = statement.where(person.age > comparative_params.gt)
         
-    if lte is not None:
-        statement = statement.where(person.age <= lte)
+    if comparative_params.lte is not None:
+        statement = statement.where(person.age <= comparative_params.lte)
         
-    if lt is not None:
-        statement = statement.where(person.age < lt)
+    if comparative_params.lt is not None:
+        statement = statement.where(person.age < comparative_params.lt)
         
-    if e is not None:
-        statement = statement.where(person.age == e)
+    if comparative_params.e is not None:
+        statement = statement.where(person.age == comparative_params.e)
     
     if learner.value == "teacher" and subject_id is not None:
         statement = statement.where(person.subject_id == subject_id) 
     
-    statement = statement.offset(offset).limit(limit)  
+    statement = statement.offset(select_params.offset).limit(select_params.limit)  
     schoolers = session.exec(statement).all()
     
     return schoolers
